@@ -29,17 +29,23 @@ def index(request):
     most_popular_posts = Post.objects.annotate(
         total_likes=Count('likes', distinct=True)
     ).order_by('-total_likes')[:5]
+    popular_posts_with_prefetch = \
+        most_popular_posts.prefetch_related('author')
 
-    fresh_posts = Post.objects.order_by('published_at')
-    most_fresh_posts = list(fresh_posts)[-5:]
+    most_fresh_posts = Post.objects.order_by('-published_at')[:5]
+    fresh_posts_with_prefetch = most_fresh_posts.prefetch_related('author')
 
     most_popular_tags = Tag.objects.annotate(
         total_posts=Count('posts', distinct=True)
     ).order_by('-total_posts')[:5]
 
     context = {
-        'most_popular_posts': [serialize_post(post) for post in most_popular_posts],
-        'page_posts': [serialize_post(post) for post in most_fresh_posts],
+        'most_popular_posts': [
+            serialize_post(post) for post in popular_posts_with_prefetch
+        ],
+        'page_posts': [
+            serialize_post(post) for post in fresh_posts_with_prefetch
+        ],
         'popular_tags': [serialize_tag(tag) for tag in most_popular_tags],
     }
     return render(request, 'index.html', context)
@@ -83,7 +89,9 @@ def post_detail(request, slug):
     context = {
         'post': serialized_post,
         'popular_tags': [serialize_tag(tag) for tag in most_popular_tags],
-        'most_popular_posts': [serialize_post(post) for post in most_popular_posts],
+        'most_popular_posts': [
+            serialize_post(post) for post in most_popular_posts
+        ],
     }
     return render(request, 'post-details.html', context)
 
@@ -105,7 +113,9 @@ def tag_filter(request, tag_title):
         "tag": tag.title,
         'popular_tags': [serialize_tag(tag) for tag in most_popular_tags],
         "posts": [serialize_post(post) for post in related_posts],
-        'most_popular_posts': [serialize_post(post) for post in most_popular_posts],
+        'most_popular_posts': [
+            serialize_post(post) for post in most_popular_posts
+        ],
     }
     return render(request, 'posts-list.html', context)
 
