@@ -10,9 +10,17 @@ class Post(models.Model):
     image = models.ImageField("Картинка")
     published_at = models.DateTimeField("Дата и время публикации")
 
-    author = models.ForeignKey(User, on_delete=models.CASCADE, verbose_name="Автор", limit_choices_to={'is_staff': True})
-    likes = models.ManyToManyField(User, related_name="liked_posts", verbose_name="Кто лайкнул", blank=True)
-    tags = models.ManyToManyField("Tag", related_name="posts", verbose_name="Теги")
+    author = models.ForeignKey(
+        User, on_delete=models.CASCADE,
+        verbose_name="Автор", limit_choices_to={'is_staff': True}
+    )
+    likes = models.ManyToManyField(
+        User, related_name="liked_posts",
+        verbose_name="Кто лайкнул", blank=True
+    )
+    tags = models.ManyToManyField(
+        "Tag", related_name="posts", verbose_name="Теги"
+    )
 
     def __str__(self):
         return self.title
@@ -45,8 +53,14 @@ class Tag(models.Model):
 
 
 class Comment(models.Model):
-    post = models.ForeignKey("Post", on_delete=models.CASCADE, verbose_name="Пост, к которому написан")
-    author = models.ForeignKey(User, on_delete=models.CASCADE, verbose_name="Автор")
+    post = models.ForeignKey(
+        "Post", on_delete=models.CASCADE,
+        verbose_name="Пост, к которому написан",
+        related_name='related_comments'
+    )
+    author = models.ForeignKey(
+        User, on_delete=models.CASCADE, verbose_name="Автор"
+    )
 
     text = models.TextField("Текст комментария")
     published_at = models.DateTimeField("Дата и время публикации")
