@@ -1,7 +1,7 @@
-
+import more_itertools
 from django.db import models
 from django.urls import reverse
-from django.db.models import Count
+from django.db.models import Count, Prefetch
 from django.contrib.auth.models import User
 
 
@@ -19,15 +19,36 @@ class PostQuerySet(models.QuerySet):
 
     def fetch_with_comments_count(self):
         posts_with_comments = Post.objects.filter(
-            id__in=[post.id for post in self]
+            id__in=self
         ).annotate(
             total_comments=Count('related_comments')
         )
-        ids_and_comments = posts_with_comments.values_list('id', 'total_comments')
-        count_for_id = dict(ids_and_comments)
+        post_ids_and_comments = dict(
+            posts_with_comments.values_list('id', 'total_comments')
+        )
         for post in self:
-            post.total_comments = count_for_id[post.id]
+            post.total_comments = post_ids_and_comments[post.id]
         return self
+
+
+    def fetch_posts_count_for_tags(self):
+        posts_count_for_tags = Post.objects.filter(
+            id__in=self
+        ).prefetch_related(
+            Prefetch(
+                'tags',
+                queryset=Tag.objects.annotate(posts_with_tag=Count('posts'))
+            )
+        )
+        for post in self:
+            tags = [post_with_tag.tags for post_with_tag in posts_count_for_tags if post_with_tag.id == post.id]
+            for tag in more_itertools.first(tags).all():
+                post.total_tags = {
+                    'title': tag.title,
+                    'posts_with_tag': tag.posts_with_tag
+                }
+        return self
+
 
 
 class Post(models.Model):
@@ -92,6 +113,20 @@ class Tag(models.Model):
         verbose_name_plural = 'теги'
 
 
+class CommentQuerySet(models.QuerySet):
+
+    def fetch_comments_by_post(self, post):
+        comments_by_post = self.select_related().filter(post=post)
+        serialized_comments = []
+        for comment in comments_by_post:
+            serialized_comments.append({
+                'text': comment.text,
+                'published_at': comment.published_at,
+                'author': comment.author.username,
+            })
+        return serialized_comments
+
+
 class Comment(models.Model):
     post = models.ForeignKey(
         "Post", on_delete=models.CASCADE,
@@ -104,6 +139,8 @@ class Comment(models.Model):
 
     text = models.TextField("Текст комментария")
     published_at = models.DateTimeField("Дата и время публикации")
+
+    objects = CommentQuerySet.as_manager()
 
     def __str__(self):
         return f"{self.author.username} under {self.post.title}"
