@@ -1,8 +1,12 @@
+import more_itertools
+from django.db.models import Count
 from django.shortcuts import render
 from blog.models import Comment, Post, Tag
 
+SELECTION_LIMIT = 5
+RELATED_POSTS_LIMIT = 20
 
-def serialize_post_optimized(post):
+def serialize_post(post):
     return {
         "title": post.title,
         "teaser_text": post.text[:200],
@@ -16,7 +20,7 @@ def serialize_post_optimized(post):
     }
 
 
-def serialize_tag_optimized(tag):
+def serialize_tag(tag):
     return {
         'title': tag.title,
         'posts_with_tag': tag.total_posts,
@@ -25,38 +29,39 @@ def serialize_tag_optimized(tag):
 
 def index(request):
 
-    most_popular_posts = Post.objects.popular()[:5] \
+    popular_posts = Post.objects.popular()[:SELECTION_LIMIT] \
         .prefetch_related('author') \
         .fetch_with_comments_count() \
         .fetch_posts_count_for_tags()
 
-    most_fresh_posts = Post.objects.fresh()[:5] \
+    fresh_posts = Post.objects.fresh()[:SELECTION_LIMIT] \
         .prefetch_related('author') \
         .fetch_with_comments_count() \
         .fetch_posts_count_for_tags()
 
-    most_popular_tags = Tag.objects.popular()[:5]
+    popular_tags = Tag.objects.popular()[:SELECTION_LIMIT]
 
     context = {
         'most_popular_posts': [
-            serialize_post_optimized(post) for post in most_popular_posts
+            serialize_post(post) for post in popular_posts
         ],
         'page_posts': [
-            serialize_post_optimized(post) for post in most_fresh_posts
+            serialize_post(post) for post in fresh_posts
         ],
         'popular_tags': [
-            serialize_tag_optimized(tag) for tag in most_popular_tags
+            serialize_tag(tag) for tag in popular_tags
         ],
     }
     return render(request, 'index.html', context)
 
 
 def post_detail(request, slug):
-    post = Post.objects.filter(slug=slug) \
-        .popular() \
+    posts = Post.objects.filter(slug=slug) \
+        .annotate(total_likes=Count('likes', distinct=True)) \
         .prefetch_related('author') \
-        .fetch_posts_count_for_tags()[0]
-    serialized_comments = Comment.objects.fetch_comments_by_post(post)
+        .fetch_posts_count_for_tags()
+    post = more_itertools.first(posts)
+    serialized_comments = Comment.objects.fetch_comments_on_post(post)
 
     serialized_post = {
         "title": post.title,
@@ -70,20 +75,20 @@ def post_detail(request, slug):
         "tags": post.total_tags,
     }
 
-    most_popular_posts = Post.objects.popular()[:5] \
+    popular_posts = Post.objects.popular()[:SELECTION_LIMIT] \
         .prefetch_related('author') \
         .fetch_with_comments_count() \
         .fetch_posts_count_for_tags()
 
-    most_popular_tags = Tag.objects.popular()[:5]
+    popular_tags = Tag.objects.popular()[:SELECTION_LIMIT]
 
     context = {
         'post': serialized_post,
         'popular_tags': [
-            serialize_tag_optimized(tag) for tag in most_popular_tags
+            serialize_tag(tag) for tag in popular_tags
         ],
         'most_popular_posts': [
-            serialize_post_optimized(post) for post in most_popular_posts
+            serialize_post(post) for post in popular_posts
         ],
     }
     return render(request, 'post-details.html', context)
@@ -92,34 +97,32 @@ def post_detail(request, slug):
 def tag_filter(request, tag_title):
     tag = Tag.objects.get(title=tag_title)
 
-    most_popular_posts = Post.objects.popular()[:5] \
+    popular_posts = Post.objects.popular()[:SELECTION_LIMIT] \
         .prefetch_related('author') \
         .fetch_with_comments_count() \
         .fetch_posts_count_for_tags()
 
-    related_posts = tag.posts.all()[:20] \
+    related_posts = tag.posts.all()[:RELATED_POSTS_LIMIT] \
         .prefetch_related('author') \
         .fetch_with_comments_count() \
         .fetch_posts_count_for_tags()
 
-    most_popular_tags = Tag.objects.popular()[:5]
+    popular_tags = Tag.objects.popular()[:SELECTION_LIMIT]
 
     context = {
         "tag": tag.title,
         'popular_tags': [
-            serialize_tag_optimized(tag) for tag in most_popular_tags
+            serialize_tag(tag) for tag in popular_tags
         ],
         "posts": [
-            serialize_post_optimized(post) for post in related_posts
+            serialize_post(post) for post in related_posts
         ],
         'most_popular_posts': [
-            serialize_post_optimized(post) for post in most_popular_posts
+            serialize_post(post) for post in popular_posts
         ],
     }
     return render(request, 'posts-list.html', context)
 
 
 def contacts(request):
-    # позже здесь будет код для статистики заходов на эту страницу
-    # и для записи фидбека
     return render(request, 'contacts.html', {})

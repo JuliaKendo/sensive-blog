@@ -30,7 +30,6 @@ class PostQuerySet(models.QuerySet):
             post.total_comments = post_ids_and_comments[post.id]
         return self
 
-
     def fetch_posts_count_for_tags(self):
         posts_count_for_tags = Post.objects.filter(
             id__in=self
@@ -41,8 +40,12 @@ class PostQuerySet(models.QuerySet):
             )
         )
         for post in self:
-            tags = [post_with_tag.tags for post_with_tag in posts_count_for_tags if post_with_tag.id == post.id]
-            for tag in more_itertools.first(tags).all():
+            current_post = filter(
+                lambda x, y=post: x.id == y.id,
+                posts_count_for_tags
+            )
+            post_count_for_tags = more_itertools.first(current_post)
+            for tag in post_count_for_tags.tags.all():
                 post.total_tags = {
                     'title': tag.title,
                     'posts_with_tag': tag.posts_with_tag
@@ -115,7 +118,7 @@ class Tag(models.Model):
 
 class CommentQuerySet(models.QuerySet):
 
-    def fetch_comments_by_post(self, post):
+    def fetch_comments_on_post(self, post):
         comments_by_post = self.select_related().filter(post=post)
         serialized_comments = []
         for comment in comments_by_post:
